@@ -1,0 +1,6 @@
+[submodule "yadacoin"]
+	path = yadacoin
+	url = git@github.com:pdxwebdev/yadacoincore.git
+[submodule "yadacoincore"]
+	path = yadacoincore
+	url = git@github.com:pdxwebdev/yadacoincore.git
