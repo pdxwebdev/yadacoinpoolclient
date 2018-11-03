@@ -8,8 +8,9 @@ from multiprocessing import Process
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QPushButton, QLineEdit, QLabel
-from yadacoin.miningpool import MiningPool
-from yadacoin import Config
+from yadacoin.miningpoolclient import MiningPoolClient
+from yadacoin.config import Config
+
 
 class Window(QMainWindow):
     def __init__(self):
@@ -24,7 +25,7 @@ class Window(QMainWindow):
 
         super(Window, self).__init__()
         self.cores = multiprocessing.cpu_count()
-        self.resize(800, 325)
+        self.resize(820, 325)
         self.move(300, 300)
         self.setWindowTitle('YadaCoin Pool Client')
         self.home()
@@ -35,37 +36,58 @@ class Window(QMainWindow):
     
     def home(self):
         self.logo = QLabel(self)
-        self.logo.setPixmap(QPixmap("yadacoinlogo.png"))
+        self.logo.setPixmap(QPixmap(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'yadacoinlogo.png')))
+        self.logo.move(0, -35)
         self.logo.resize(800, 300)
         self.logo.show()
         
-        anchor = 300
+        xanchor = 300
+        yanchor = 165
         pooltext = QLabel(self)
         pooltext.setText('Pool:')
-        pooltext.move(anchor - 32, 235)
+        pooltext.move(xanchor - 32, yanchor + 35)
         pooltext.show()
         corestext = QLabel(self)
-        corestext.setText('cores:')
-        corestext.move(anchor - 32, 275)
+        corestext.setText('Cores:')
+        corestext.move(xanchor - 32, yanchor + 75)
+        corestext.show()
+        corestext = QLabel(self)
+        corestext.setText('Address:')
+        corestext.move(xanchor + 50, yanchor + 75)
+        corestext.show()
+        corestext = QLabel(self)
+        corestext.setText('WIF/Seed:')
+        corestext.move(xanchor - 32, yanchor + 115)
         corestext.show()
         self.pool = QLineEdit(self)
         self.pool.setText('yadacoin.io:8000')
-        self.pool.move(anchor + 10, 235)
+        self.pool.move(xanchor + 10, yanchor + 35)
         self.pool.resize(225, 30)
+        self.address = QLineEdit(self)
+        self.address.setText(Config.address)
+        self.address.move(xanchor + 100, yanchor + 75)
+        self.address.resize(225, 30)
+        self.wif = QLineEdit(self)
+        self.wif.setText(Config.wif)
+        self.wif.move(xanchor + 30, yanchor + 115)
+        self.wif.resize(400, 30)
         self.cores = QLineEdit(self)
         self.cores.setText(str(multiprocessing.cpu_count()))
-        self.cores.move(anchor + 10, 275)
+        self.cores.move(xanchor + 10, yanchor + 75)
         self.cores.resize(25, 30)
         self.btn = QPushButton("Start mining", self)
-        self.btn.move(anchor + 255, 235)
+        self.btn.move(xanchor + 255, yanchor + 35)
         self.btn.clicked.connect(self.start_mine)
         self.stopbtn = QPushButton("Stop mining", self)
-        self.stopbtn.move(anchor + 375, 235)
+        self.stopbtn.move(xanchor + 375, yanchor + 35)
         self.stopbtn.clicked.connect(self.stop_mine)
         self.stopbtn.setDisabled(True)
         self.timer = QTimer(self)
+        self.timer.setSingleShot(False)
         self.timer.timeout.connect(self.mine)
         self.running_processes = []
+        self.hashrate = QLabel(self)
+        self.hashrate.move(xanchor + 375, yanchor + 75)
         self.show()
 
     def get_mine_data(self):
@@ -74,6 +96,7 @@ class Window(QMainWindow):
     def start_mine(self):
         self.stopbtn.setDisabled(False)
         self.pool.setDisabled(True)
+        self.cores.setDisabled(True)
         self.btn.setDisabled(True)
         self.running_processes = self.running_processes or []
         self.timer.start(1000)
@@ -81,29 +104,35 @@ class Window(QMainWindow):
     def stop_mine(self):
         self.stopbtn.setDisabled(True)
         self.pool.setDisabled(False)
+        self.cores.setDisabled(False)
         self.btn.setDisabled(False)
         self.timer.stop()
         if self.running_processes:
             for i, proc in enumerate(self.running_processes):
-                proc.terminate()
+                proc['process'].terminate()
         self.running_processes = []
     
     def mine(self):
         if len(self.running_processes) >= int(self.cores.text()):
             for i, proc in enumerate(self.running_processes):
-                if not proc.is_alive():
-                    proc.terminate()
+                if not proc['process'].is_alive():
+                    self.hashrate.setText("{:,}/Hs".format(int(1000000 / (time.time() - self.running_processes[i]['start_time']))))
+                    proc['process'].terminate()
                     data = self.get_mine_data()
-                    p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+                    p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
                     p.start()
-                    self.running_processes[i] = p
+                    self.running_processes[i] = {'process': p, 'start_time': time.time()}
         else:
             data = self.get_mine_data()
-            p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+            p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
             p.start()
-            self.running_processes.append(p)
+            self.running_processes.append({'process': p, 'start_time': time.time()})
             
-        
-app = QApplication(sys.argv)
-gui = Window()
-sys.exit(app.exec_())
+if __name__ == '__main__':
+    print('Starting YadaCoin Mining Pool Client...')
+    multiprocessing.freeze_support()
+    app = QApplication(sys.argv)
+    gui = Window()
+    sys.exit(app.exec_())
+else:
+    print('Spawning mining subprocess...')
