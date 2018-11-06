@@ -91,9 +91,14 @@ class Window(QMainWindow):
         self.show()
 
     def get_mine_data(self):
-        return json.loads(requests.get("http://{pool}/pool".format(pool=self.pool.text())).content)
+        try:
+            return json.loads(requests.get("http://{pool}/pool".format(pool=self.pool.text())).content)
+        except Exception as e:
+            print(e)
+            return None
     
     def start_mine(self):
+        print('Starting YadaCoin Mining...')
         self.stopbtn.setDisabled(False)
         self.pool.setDisabled(True)
         self.cores.setDisabled(True)
@@ -119,20 +124,21 @@ class Window(QMainWindow):
                     self.hashrate.setText("{:,}/Hs".format(int(1000000 / (time.time() - self.running_processes[i]['start_time']))))
                     proc['process'].terminate()
                     data = self.get_mine_data()
-                    p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
-                    p.start()
-                    self.running_processes[i] = {'process': p, 'start_time': time.time()}
+                    if data:
+                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+                        p.start()
+                        self.running_processes[i] = {'process': p, 'start_time': time.time()}
+                        print('mining process started...')
         else:
             data = self.get_mine_data()
-            p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
-            p.start()
-            self.running_processes.append({'process': p, 'start_time': time.time()})
+            if data:
+                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+                p.start()
+                self.running_processes.append({'process': p, 'start_time': time.time()})
+                print('mining process started...')
             
 if __name__ == '__main__':
-    print('Starting YadaCoin Mining Pool Client...')
     multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     gui = Window()
     sys.exit(app.exec_())
-else:
-    print('Spawning mining subprocess...')
