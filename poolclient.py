@@ -29,6 +29,7 @@ class Window(QMainWindow):
         self.move(300, 300)
         self.setWindowTitle('YadaCoin Pool Client')
         self.home()
+        self.debug = False
     
     def closeEvent(self, event):
         self.stop_mine()
@@ -92,9 +93,10 @@ class Window(QMainWindow):
 
     def get_mine_data(self):
         try:
-            return json.loads(requests.get("http://{pool}/pool".format(pool=self.pool.text())).content)
+            return json.loads(requests.get("http://{pool}/pool".format(pool=self.pool.text()), headers={'Connection':'close'}).content)
         except Exception as e:
-            print(e)
+            if self.debug:
+                print(e)
             return None
     
     def start_mine(self):
@@ -121,18 +123,18 @@ class Window(QMainWindow):
         if len(self.running_processes) >= int(self.cores.text()):
             for i, proc in enumerate(self.running_processes):
                 if not proc['process'].is_alive():
-                    self.hashrate.setText("{:,}/Hs".format(int(1000000 / (time.time() - self.running_processes[i]['start_time']))))
+                    self.hashrate.setText("{:,}/Hs".format(int(1000000 / (time.time() - self.running_processes[i]['start_time']) * int(self.cores.text()))))
                     proc['process'].terminate()
                     data = self.get_mine_data()
                     if data:
-                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min'], self.debug))
                         p.start()
                         self.running_processes[i] = {'process': p, 'start_time': time.time()}
                         print('mining process started...')
         else:
             data = self.get_mine_data()
             if data:
-                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min']))
+                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min'], self.debug))
                 p.start()
                 self.running_processes.append({'process': p, 'start_time': time.time()})
                 print('mining process started...')
