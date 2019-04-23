@@ -123,20 +123,22 @@ class Window(QMainWindow):
         if len(self.running_processes) >= int(self.cores.text()):
             for i, proc in enumerate(self.running_processes):
                 if not proc['process'].is_alive():
-                    self.hashrate.setText("{:,}/Hs".format(int(1000000 / (time.time() - self.running_processes[i]['start_time']) * int(self.cores.text()))))
+                    self.hashrate.setText("{:,}/Hs".format(int((proc['work_size']) / (time.time() - self.running_processes[i]['start_time'])) * int(self.cores.text())))
                     proc['process'].terminate()
                     data = self.get_mine_data()
                     if data:
-                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min'], self.debug))
+                        data['nonces'] = [0, 10000]
+                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), data['nonces'], data['special_min'], self.debug))
                         p.start()
-                        self.running_processes[i] = {'process': p, 'start_time': time.time()}
+                        self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': data['nonces'][1] - data['nonces'][0]}
                         print('mining process started...')
         else:
             data = self.get_mine_data()
             if data:
-                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], data['target'], data['nonces'], data['special_min'], self.debug))
+                data['nonces'] = [0, 10000]
+                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), data['nonces'], data['special_min'], self.debug))
                 p.start()
-                self.running_processes.append({'process': p, 'start_time': time.time()})
+                self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': data['nonces'][1] - data['nonces'][0]})
                 print('mining process started...')
             
 if __name__ == '__main__':
