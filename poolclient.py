@@ -4,6 +4,7 @@ import requests
 import time
 import os
 import multiprocessing
+from random import randrange
 from multiprocessing import Process
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QPixmap
@@ -60,8 +61,10 @@ class Window(QMainWindow):
         corestext.setText('WIF/Seed:')
         corestext.move(xanchor - 32, yanchor + 115)
         corestext.show()
+        self.nonces = []
+        self.work_size = 0xffffffffffff
         self.pool = QLineEdit(self)
-        self.pool.setText('yadacoin.io:8000')
+        self.pool.setText('https://yadacoin.io')
         self.pool.move(xanchor + 10, yanchor + 35)
         self.pool.resize(225, 30)
         self.address = QLineEdit(self)
@@ -93,7 +96,7 @@ class Window(QMainWindow):
 
     def get_mine_data(self):
         try:
-            return json.loads(requests.get("http://{pool}/pool".format(pool=self.pool.text()), headers={'Connection':'close'}).content)
+            return json.loads(requests.get("{pool}/pool".format(pool=self.pool.text()), verify=False, headers={'Connection':'close'}).content)
         except Exception as e:
             if self.debug:
                 print(e)
@@ -120,6 +123,9 @@ class Window(QMainWindow):
         self.running_processes = []
     
     def mine(self):
+        if not self.nonces:
+            start_nonce = randrange(self.work_size)
+            self.nonces.extend([start_nonce, start_nonce + self.work_size])
         if len(self.running_processes) >= int(self.cores.text()):
             for i, proc in enumerate(self.running_processes):
                 if not proc['process'].is_alive():
@@ -127,19 +133,22 @@ class Window(QMainWindow):
                     proc['process'].terminate()
                     data = self.get_mine_data()
                     if data:
-                        data['nonces'] = [0, 10000]
-                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), data['nonces'], data['special_min'], self.debug))
+                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug))
                         p.start()
-                        self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': data['nonces'][1] - data['nonces'][0]}
+                        self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
                         print('mining process started...')
+                        self.nonces[0] += self.work_size
+                        self.nonces[1] += self.work_size
         else:
             data = self.get_mine_data()
             if data:
-                data['nonces'] = [0, 10000]
-                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), data['nonces'], data['special_min'], self.debug))
+                #res = MiningPoolClient.pool_mine(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug)
+                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug))
                 p.start()
-                self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': data['nonces'][1] - data['nonces'][0]})
+                self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
                 print('mining process started...')
+                self.nonces[0] += self.work_size
+                self.nonces[1] += self.work_size
             
 if __name__ == '__main__':
     multiprocessing.freeze_support()
