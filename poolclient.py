@@ -1,4 +1,8 @@
 import sys
+import os.path
+yada_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'yadacoin')
+print(yada_dir)
+sys.path.insert(0, yada_dir)
 import json
 import requests
 import time
@@ -9,8 +13,8 @@ from multiprocessing import Process
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QPushButton, QLineEdit, QLabel
-from yadacoin.miningpoolclient import MiningPoolClient
 from yadacoin.config import Config
+from yadacoin.miningpool import MiningPool
 
 
 class Window(QMainWindow):
@@ -62,7 +66,7 @@ class Window(QMainWindow):
         corestext.move(xanchor - 32, yanchor + 115)
         corestext.show()
         self.nonces = []
-        self.work_size = 0xffffffffffff
+        self.work_size = 1000000
         self.pool = QLineEdit(self)
         self.pool.setText('https://yadacoin.io')
         self.pool.move(xanchor + 10, yanchor + 35)
@@ -109,6 +113,7 @@ class Window(QMainWindow):
         self.cores.setDisabled(True)
         self.btn.setDisabled(True)
         self.running_processes = self.running_processes or []
+        self.data = self.get_mine_data()
         self.timer.start(1000)
 
     def stop_mine(self):
@@ -124,26 +129,25 @@ class Window(QMainWindow):
     
     def mine(self):
         if not self.nonces:
-            start_nonce = randrange(self.work_size)
+            start_nonce = randrange(0xffffffffffff)
             self.nonces.extend([start_nonce, start_nonce + self.work_size])
         if len(self.running_processes) >= int(self.cores.text()):
             for i, proc in enumerate(self.running_processes):
                 if not proc['process'].is_alive():
                     self.hashrate.setText("{:,}/Hs".format(int((proc['work_size']) / (time.time() - self.running_processes[i]['start_time'])) * int(self.cores.text())))
                     proc['process'].terminate()
-                    data = self.get_mine_data()
-                    if data:
-                        p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug))
+                    self.data = self.get_mine_data()
+                    if self.data:
+                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
                         p.start()
                         self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
                         print('mining process started...')
                         self.nonces[0] += self.work_size
                         self.nonces[1] += self.work_size
         else:
-            data = self.get_mine_data()
-            if data:
-                #res = MiningPoolClient.pool_mine(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug)
-                p = Process(target=MiningPoolClient.pool_mine, args=(self.pool.text(), Config.address, data['header'], int(data['target'], 16), self.nonces, data['special_min'], self.debug))
+            if self.data:
+                #res = MiningPool.pool_mine(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target'])
+                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
                 p.start()
                 self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
                 print('mining process started...')
