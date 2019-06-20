@@ -22,11 +22,11 @@ class Window(QMainWindow):
         configfilepath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.json')
         if os.path.isfile(configfilepath):
             with open(configfilepath) as f:
-                Config.from_dict(json.loads(f.read()))
+                self.config = Config(json.loads(f.read()))
         else:
-            Config.generate()
+            self.config = Config.generate()
             with open(configfilepath, 'w') as f:
-                f.write(Config.to_json())
+                f.write(self.config.to_json())
 
         super(Window, self).__init__()
         self.cores = multiprocessing.cpu_count()
@@ -72,11 +72,11 @@ class Window(QMainWindow):
         self.pool.move(xanchor + 10, yanchor + 35)
         self.pool.resize(225, 30)
         self.address = QLineEdit(self)
-        self.address.setText(Config.address)
+        self.address.setText(self.config.address)
         self.address.move(xanchor + 115, yanchor + 75)
         self.address.resize(325, 30)
         self.wif = QLineEdit(self)
-        self.wif.setText(Config.wif)
+        self.wif.setText(self.config.wif)
         self.wif.move(xanchor + 40, yanchor + 115)
         self.wif.resize(460, 30)
         self.cores = QLineEdit(self)
@@ -138,7 +138,7 @@ class Window(QMainWindow):
                     proc['process'].terminate()
                     self.data = self.get_mine_data()
                     if self.data:
-                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
+                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
                         p.start()
                         self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
                         print('mining process started...')
@@ -147,7 +147,7 @@ class Window(QMainWindow):
         else:
             if self.data:
                 #res = MiningPool.pool_mine(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target'])
-                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), Config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
+                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(),  self.config.address, self.data['header'], int(self.data['target'], 16), self.nonces, self.data['special_min'], self.data['special_target']))
                 p.start()
                 self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
                 print('mining process started...')
