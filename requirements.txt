@@ -4,7 +4,7 @@ certifi==2018.10.15
 cffi==1.11.5
 chardet==3.0.4
 coincurve==9.0.0
-eccsnacks==1.0.1
+-e git://github.com/pdxwebdev/eccsnacks.git#egg=eccsnacks
 idna==2.7
 pkg-resources==0.0.0
 pycparser==2.19
