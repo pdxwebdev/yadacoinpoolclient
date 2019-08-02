@@ -280,11 +280,6 @@ class Window(QMainWindow):
             self.invite.setDisabled(False)
             return
         """
-        try:
-            self.pool_data = self.get_mine_data()
-        except Exception as e:
-            print(e)
-            return
         if not self.nonces:
             start_nonce = randrange(0xffffffffffff)
             self.nonces.extend([start_nonce, start_nonce + self.work_size])
@@ -293,7 +288,12 @@ class Window(QMainWindow):
                 if not proc['process'].is_alive():
                     self.hashrate.setText("{:,}/Hs".format(int((proc['work_size']) / (time.time() - self.running_processes[i]['start_time'])) * int(self.cores.text())))
                     proc['process'].terminate()
-                    if self.data:
+                    try:
+                        self.pool_data = self.get_mine_data()
+                    except Exception as e:
+                        print(e)
+                        return
+                    if self.pool_data:
                         p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
                         p.start()
                         self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
@@ -301,7 +301,12 @@ class Window(QMainWindow):
                         self.nonces[0] += self.work_size
                         self.nonces[1] += self.work_size
         else:
-            if self.data:
+            try:
+                self.pool_data = self.get_mine_data()
+            except Exception as e:
+                print(e)
+                return
+            if self.pool_data:
                 #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
                 p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
                 p.start()
