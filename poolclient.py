@@ -73,11 +73,6 @@ class Window(QMainWindow):
         corestext.setText('WIF/Seed:')
         corestext.move(xanchor - 32, yanchor + 115)
         corestext.show()
-        self.registration_status = QLabel(self)
-        self.registration_status.setText('click "start mining" button')
-        self.registration_status.move(22, yanchor + 80)
-        self.registration_status.resize(250, 20)
-        self.registration_status.show()
         self.nonces = []
         self.work_size = 1000000
         self.pool = QLineEdit(self)
@@ -110,20 +105,9 @@ class Window(QMainWindow):
         self.timer = QTimer(self)
         self.timer.setSingleShot(False)
         self.timer.timeout.connect(self.mine)
-        self.invite_timer = QTimer(self)
-        self.invite_timer.setSingleShot(False)
-        self.invite_timer.timeout.connect(self.invite_status)
-        self.accept_invite_timer = QTimer(self)
-        self.accept_invite_timer.setSingleShot(False)
-        self.accept_invite_timer.timeout.connect(self.accept_invite_status)
         self.running_processes = []
         self.hashrate = QLabel(self)
         self.hashrate.move(25, yanchor + 75)
-        self.invite = QPushButton("Request invite", self)
-        self.invite.move(40, yanchor + 105)
-        self.invite.resize(150, 30)
-        self.invite.setDisabled(True)
-        self.invite.clicked.connect(self.request_invite)
         self.show()
 
     def get_mine_data(self):
@@ -142,95 +126,6 @@ class Window(QMainWindow):
                 print(e)
             return None
     
-    def request_invite(self):
-        self.invite_q = Queue()
-        p = Process(target=self.request_invite_process, args=(self.invite_q,))
-        p.start()
-        self.invite_timer.start(1000)
-    
-    def accept_invite(self):
-        self.accept_invite_q = Queue()
-        transaction = TransactionFactory(
-            block_height=0,
-            bulletin_secret=self.graph['invited']['bulletin_secret'],
-            username=self.graph['invited']['username'],
-            value=int([x for x in self.graph['invited']['outputs'] if x['to'] == self.config.address][0]['value']),
-            fee=0,
-            public_key=self.config.public_key,
-            private_key=self.config.private_key,
-            to=[x for x in self.graph['invited']['outputs'] if x['to'] != self.config.address][0]['to'],
-            inputs=[{'id': self.graph['invited']['id']}],
-            skip_money=True # because we don't have a local copy of the blockchain
-        )
-        p = Process(target=self.accept_invite_process, args=(self.accept_invite_q, transaction.transaction.to_dict()))
-        p.start()
-        self.invite_timer.start(1000)
-
-    def accept_invite_process(self, q, transaction):
-        self.invite.setText("Wait...")
-        self.invite.setDisabled(True)
-        try:
-            q.put(json.loads(
-                requests.post(
-                    "{pool}/transaction?bulletin_secret={bulletin_secret}".format(
-                        pool=self.pool.text(),
-                        bulletin_secret=self.config.bulletin_secret
-                    ), 
-                    json=transaction,
-                    headers={'Connection':'close',}
-                ).content))
-        except Exception as e:
-            self.invite.setDisabled(False)
-            self.invite.setText("Error...{}".format(e))
-            if self.debug:
-                print(e)
-            return None
-
-    def request_invite_process(self, q):
-        self.invite.setText("Wait...")
-        self.invite.setDisabled(True)
-        try:
-            q.put(json.loads(
-                requests.post(
-                    "{pool}/create-relationship".format(pool=self.pool.text()), 
-                    json={
-                        'bulletin_secret': self.config.bulletin_secret,
-                        'to': self.config.address,
-                        'username': self.config.username
-                    },
-                    headers={'Connection':'close',}
-                ).content))
-        except Exception as e:
-            self.invite.setDisabled(False)
-            self.invite.setText("Error...{}".format(e))
-            if self.debug:
-                print(e)
-            return None
-
-    def invite_status(self):
-        try:
-            self.invite_q = self.invite_q.get_nowait()
-        except:
-            return
-        if self.invite_q.get('success') == True:
-            self.invite.setDisabled(True)
-            self.invite.setText("Invite complete!")
-        else:
-            self.invite.setDisabled(False)
-        self.invite_timer.stop()
-
-    def accept_invite_status(self):
-        try:
-            self.accept_invite_q = self.accept_invite_q.get_nowait()
-        except:
-            return
-        if self.accept_invite_q.get('success') == True:
-            self.invite.setDisabled(True)
-            self.invite.setText("Invite complete!")
-        else:
-            self.invite.setDisabled(False)
-        self.invite_timer.stop()
-    
     def start_mine(self):
         self.graph = Queue()
         #self.get_graph_info_p = Process(target=self.get_graph_info, args=(self.graph, self.pool.text(), self.config.bulletin_secret))
@@ -243,7 +138,6 @@ class Window(QMainWindow):
         self.running_processes = self.running_processes or []
         self.data = Queue()
         self.timer.start(1000)
-        self.invite_timer.stop()
 
     def stop_mine(self):
         self.stopbtn.setDisabled(True)
@@ -257,29 +151,6 @@ class Window(QMainWindow):
         self.running_processes = []
     
     def mine(self):
-        """
-        try:
-            self.graph = self.graph.get_nowait()
-        except:
-            return
-        if self.graph.get('invited'):
-            self.registration_status.setText('Join status: Invited')
-            self.invite.setText('Accept invite')
-            self.invite.setDisabled(False)
-            self.invite.clicked.disconnect()
-            self.invite.clicked.connect(self.accept_invite)
-        elif self.graph.get('pending_registration'):
-            self.registration_status.setText('Join status: Pending')
-            self.invite.clicked.disconnect()
-            self.invite.setText('Accept invite')
-            self.invite.setDisabled(True)
-        elif self.graph['registered']:
-            self.registration_status.setText('Join status: Registered')
-            self.invite.setDisabled(True)
-        else:
-            self.invite.setDisabled(False)
-            return
-        """
         if not self.nonces:
             start_nonce = randrange(0xffffffffffff)
             self.nonces.extend([start_nonce, start_nonce + self.work_size])
@@ -294,7 +165,7 @@ class Window(QMainWindow):
                         print(e)
                         return
                     if self.pool_data:
-                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
+                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
                         p.start()
                         self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
                         print('mining process started...')
@@ -307,8 +178,8 @@ class Window(QMainWindow):
                 print(e)
                 return
             if self.pool_data:
-                #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
-                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
+                #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
+                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
                 p.start()
                 self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
                 print('mining process started...')
