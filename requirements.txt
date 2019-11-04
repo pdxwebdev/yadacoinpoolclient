@@ -12,5 +12,5 @@ PyQt5==5.11.3
 PyQt5-sip==4.19.13
 python-bitcoinlib==0.10.1
 requests==2.20.0
-urllib3==1.24.1
+urllib3==1.24.2
 -e git://github.com/pdxwebdev/pyrx#egg=pyrx
