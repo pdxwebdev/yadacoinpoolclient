@@ -35,7 +35,7 @@ class Window(QMainWindow):
         yadacoin.config.CONFIG = self.config
 
         super(Window, self).__init__()
-        self.cores = multiprocessing.cpu_count()
+        self.cores = multiprocessing.cpu_count() - 2
         self.resize(820, 325)
         self.move(300, 300)
         self.setWindowTitle('YadaCoin Pool Client')
@@ -92,7 +92,7 @@ class Window(QMainWindow):
         self.wif.setReadOnly(True)
         self.wif.setStyleSheet("background-color: rgb(200, 200, 200); color: rgb(100, 100, 100); border: none;")
         self.cores = QLineEdit(self)
-        self.cores.setText(str(multiprocessing.cpu_count()))
+        self.cores.setText(str(multiprocessing.cpu_count() - 2))
         self.cores.move(xanchor + 15, yanchor + 75)
         self.cores.resize(25, 30)
         self.btn = QPushButton("Start mining", self)
