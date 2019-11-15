@@ -105,7 +105,7 @@ class Window(QMainWindow):
         self.timer = QTimer(self)
         self.timer.setSingleShot(False)
         self.timer.timeout.connect(self.mine)
-        self.running_process = {}
+        self.running_processes = []
         self.hashrate = QLabel(self)
         self.hashrate.move(25, yanchor + 75)
         self.show()
@@ -135,7 +135,7 @@ class Window(QMainWindow):
         self.pool.setDisabled(True)
         self.cores.setDisabled(True)
         self.btn.setDisabled(True)
-        self.running_process = self.running_process or {}
+        self.running_processes = self.running_processes or []
         self.data = Queue()
         self.timer.start(1000)
 
@@ -145,26 +145,46 @@ class Window(QMainWindow):
         self.cores.setDisabled(False)
         self.btn.setDisabled(False)
         self.timer.stop()
-        if self.running_process.get('process'):
-            self.running_process.get('process').terminate()
+        if self.running_processes:
+            for i, proc in enumerate(self.running_processes):
+                proc['process'].terminate()
+        self.running_processes = []
     
     def mine(self):
         if not self.nonces:
             start_nonce = randrange(0xffffffffffff)
             self.nonces.extend([start_nonce, start_nonce + self.work_size])
-        try:
-            self.pool_data = self.get_mine_data()
-        except Exception as e:
-            print(e)
-            return
-        if self.pool_data and ((self.running_process.get('process') and not self.running_process.get('process').is_alive()) or not self.running_process.get('process')):
-            #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
-            p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), int(self.cores.text()), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
-            p.start()
-            self.running_process = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
-            print('mining process started...')
-            self.nonces[0] += self.work_size
-            self.nonces[1] += self.work_size
+        if len(self.running_processes) >= int(self.cores.text()):
+            for i, proc in enumerate(self.running_processes):
+                if not proc['process'].is_alive():
+                    self.hashrate.setText("{:,}/Hs".format(int((proc['work_size']) / (time.time() - self.running_processes[i]['start_time'])) * int(self.cores.text())))
+                    proc['process'].terminate()
+                    try:
+                        self.pool_data = self.get_mine_data()
+                    except Exception as e:
+                        print(e)
+                        return
+                    if self.pool_data:
+                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.cores.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
+                        p.start()
+                        self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
+                        print('mining process started...')
+                        self.nonces[0] += self.work_size
+                        self.nonces[1] += self.work_size
+        else:
+            try:
+                self.pool_data = self.get_mine_data()
+            except Exception as e:
+                print(e)
+                return
+            if self.pool_data:
+                #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
+                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.cores.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
+                p.start()
+                self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
+                print('mining process started...')
+                self.nonces[0] += self.work_size
+                self.nonces[1] += self.work_size
             
 if __name__ == '__main__':
     multiprocessing.freeze_support()
