@@ -9,6 +9,8 @@ import time
 import os
 import multiprocessing
 import yadacoin.config
+import binascii
+import pyrx
 from random import randrange
 from multiprocessing import Process, Queue
 from PyQt5.QtCore import QTimer
@@ -74,7 +76,7 @@ class Window(QMainWindow):
         corestext.move(xanchor - 32, yanchor + 115)
         corestext.show()
         self.nonces = []
-        self.work_size = 1000000
+        self.work_size = 10000
         self.pool = QLineEdit(self)
         self.pool.setText('https://yadacoin.io')
         self.pool.move(xanchor + 10, yanchor + 35)
@@ -108,6 +110,7 @@ class Window(QMainWindow):
         self.running_processes = []
         self.hashrate = QLabel(self)
         self.hashrate.move(25, yanchor + 75)
+        self.pyrx = pyrx.PyRX()
         self.show()
 
     def get_mine_data(self):
@@ -154,37 +157,42 @@ class Window(QMainWindow):
         if not self.nonces:
             start_nonce = randrange(0xffffffffffff)
             self.nonces.extend([start_nonce, start_nonce + self.work_size])
-        if len(self.running_processes) >= int(self.cores.text()):
-            for i, proc in enumerate(self.running_processes):
-                if not proc['process'].is_alive():
-                    self.hashrate.setText("{:,}/Hs".format(int((proc['work_size']) / (time.time() - self.running_processes[i]['start_time'])) * int(self.cores.text())))
-                    proc['process'].terminate()
-                    try:
-                        self.pool_data = self.get_mine_data()
-                    except Exception as e:
-                        print(e)
-                        return
-                    if self.pool_data:
-                        p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.cores.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
-                        p.start()
-                        self.running_processes[i] = {'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]}
-                        print('mining process started...')
-                        self.nonces[0] += self.work_size
-                        self.nonces[1] += self.work_size
-        else:
+        try:
+            self.pool_data = self.get_mine_data()
+        except Exception as e:
+            print(e)
+            return
+        if self.pool_data:
+            lowest = (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, 0, '')
+            nonce = self.nonces[0]
+            start = time.time()
+            seed_hash = binascii.unhexlify('4181a493b397a733b083639334bc32b407915b9a82b7917ac361816f0a1f5d4d') #sha256(yadacoin65000)
+            while nonce < self.nonces[1]:
+                header = self.pool_data['header'].format(nonce=nonce)
+                bh = self.pyrx.get_rx_hash(header, seed_hash, int(self.pool_data['height']), 8)
+                hash_test = binascii.hexlify(bh).decode()
+                if hash_test.startswith('000'):
+                    print(hash_test)
+                text_int = int(hash_test, 16)
+                if text_int < int(self.pool_data['target'], 16) or (self.pool_data['special_min'] and text_int < int(self.pool_data['special_target'], 16)):
+                    lowest = (text_int, nonce, hash_test)
+                    break
+
+                if text_int < lowest[0]:
+                    lowest = (text_int, nonce, hash_test)
+                nonce += 1
+            print(lowest[2])
             try:
-                self.pool_data = self.get_mine_data()
+                requests.post("{pool}/pool-submit".format(pool=self.pool.text()), json={
+                    'nonce': '{:02x}'.format(lowest[1]),
+                    'hash': lowest[2],
+                    'address': self.address.text()
+                }, headers={'Connection':'close'})
             except Exception as e:
                 print(e)
-                return
-            if self.pool_data:
-                #res = MiningPool.pool_mine(self.pool.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target'])
-                p = Process(target=MiningPool.pool_mine, args=(self.pool.text(), self.cores.text(), self.config.address, self.pool_data['height'], self.pool_data['header'], int(self.pool_data['target'], 16), self.nonces, self.pool_data['special_min'], self.pool_data['special_target']))
-                p.start()
-                self.running_processes.append({'process': p, 'start_time': time.time(), 'work_size': self.nonces[1] - self.nonces[0]})
-                print('mining process started...')
-                self.nonces[0] += self.work_size
-                self.nonces[1] += self.work_size
+            self.hashrate.setText('{}H/s'.format(int(self.work_size / (time.time() - start))))
+            self.nonces[0] += self.work_size
+            self.nonces[1] += self.work_size
             
 if __name__ == '__main__':
     multiprocessing.freeze_support()
