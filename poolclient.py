@@ -183,11 +183,12 @@ class Window(QMainWindow):
                 nonce += 1
             print(lowest[2])
             try:
-                requests.post("{pool}/pool-submit".format(pool=self.pool.text()), json={
+                res = requests.post("{pool}/pool-submit".format(pool=self.pool.text()), json={
                     'nonce': '{:02x}'.format(lowest[1]),
                     'hash': lowest[2],
                     'address': self.address.text()
                 }, headers={'Connection':'close'})
+                print(res.content)
             except Exception as e:
                 print(e)
             self.hashrate.setText('{}H/s'.format(int(self.work_size / (time.time() - start))))
